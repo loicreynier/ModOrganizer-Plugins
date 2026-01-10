@@ -4,7 +4,7 @@
   "Description": "Root Builder is a Mod Organizer 2 plugin that allows you to manage files in the base game folder, not just the Data folder. Keep the game folder untouched, switch game versions, switch enb files, and safely remove all of them with Root Builder!",
   "NexusUrl": "https://www.nexusmods.com/skyrimspecialedition/mods/31720",
   "GithubUrl": "https://github.com/Kezyma/ModOrganizer-Plugins",
-  "DocsUrl": "https://kezyma.github.io/?p=rootbuilder",
+  "DocsUrl": "https://github.com/Kezyma/ModOrganizer-Plugins/blob/main/docs/rootbuilder.md",
   "Versions": [
     {
       "Version": "4.5.2",
@@ -53,9 +53,29 @@
         "(5.0.1) Fixed an issue with case senstivity and different path separators if using redirect.",
         "(5.0.2) Fixed an issue with [ and ] being treated as a wildcard when part of a path name.",
         "(5.0.3) Fixed an issue with running the installer module on MO v2.5.",
-        "(5.0.4) Exclusions & custom mode settings now support regex expressions with the prefix r:"
+        "(5.0.4) Exclusions & custom mode settings now support regex expressions with the prefix r:",
+        "(5.0.5) Updates for MO2 2.5.2, primarily courtesy of Zash"
       ],
-      "DownloadUrl": "https://github.com/Kezyma/ModOrganizer-Plugins/releases/download/rootbuilder/rootbuilder.5.0.4.zip",
+      "DownloadUrl": "https://github.com/Kezyma/ModOrganizer-Plugins/releases/download/rootbuilder/rootbuilder.5.0.5.zip",
+      "PluginPath": [
+        "rootbuilder"
+      ],
+      "LocalePath": [],
+      "DataPath": [
+        "data/rootbuilder"
+      ]
+    },
+    {
+      "Version": "5.1.1",
+      "Released": "2026-01-09",
+      "MinSupport": "2.4.0",
+      "MaxSupport": "2.5.0",
+      "MinWorking": "2.4.0",
+      "ReleaseNotes": [
+        "(5.1.0) Installing a mod with only a Root folder will no longer warn the user that the mod looks incorrect.",
+        "(5.1.1) Fixed an error where Root Builder was checking a path with an invalid escape string."
+      ],
+      "DownloadUrl": "https://github.com/Kezyma/ModOrganizer-Plugins/releases/download/rootbuilder/rootbuilder.5.1.1.zip",
       "PluginPath": [
         "rootbuilder"
       ],

@@ -8,7 +8,7 @@ from ..modules.reinstaller_paths import ReinstallerPaths, ReinstallerPathsNoCopy
 
 
 class Reinstaller:
-    """Core Shortcutter class that handles all plugin functionality."""
+    """Core Reinstaller class that handles all plugin functionality."""
 
     def __init__(self, organiser: mobase.IOrganizer) -> None:
         self._organiser = organiser

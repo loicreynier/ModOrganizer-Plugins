@@ -35,6 +35,11 @@
     "Manifest": "https://raw.githubusercontent.com/Kezyma/ModOrganizer-Plugins/main/directory/plugins/openmwplayer.json"
   },
   {
+    "Name": "List Exporter",
+    "Identifier": "listexporter",
+    "Manifest": "https://raw.githubusercontent.com/Kezyma/ModOrganizer-Plugins/main/directory/plugins/listexporter.json"
+  },
+  {
     "Name": "LOOT Warning Checker",
     "Identifier": "lootwarningchecker",
     "Manifest": "https://raw.githubusercontent.com/JonathanFeenstra/modorganizer-loot-warning-checker/main/manifest.json"
@@ -113,5 +118,25 @@
     "Name": "Auto-Activator",
     "Identifier": "autoactivator",
     "Manifest": "https://raw.githubusercontent.com/JonathanFeenstra/modorganizer-auto-activator/main/manifest.json"
+  },
+  {
+    "Name": "BodySlide Batch Builder",
+    "Identifier": "BatchBodySlideBuilder",
+    "Manifest": "https://raw.githubusercontent.com/tkoopman/MO2-BodySlide-Batch-Builder/refs/heads/master/plugindefinition.json"
+  },
+  {
+    "Name": "Oracle",
+    "Identifier": "plugin_oracle",
+    "Manifest": "https://raw.githubusercontent.com/Levalicious/MO2-Oracle/refs/heads/master/plugin_definition.json"
+  },
+  {
+    "Name": "FOMOD Plus",
+    "Identifier": "fomod-plus",
+    "Manifest": "https://raw.githubusercontent.com/aglowinthefield/mo2-fomod-plus/refs/heads/main/plugindefinition.json"
+  },
+  {
+    "Name": "Nexus Collection Downloader",
+    "Identifier": "nxm-collection-dl",
+    "Manifest": "https://raw.githubusercontent.com/Furglitch/modorganizer2-nxm-collection-dl/main/plugindefinition.json"
   }
 ]

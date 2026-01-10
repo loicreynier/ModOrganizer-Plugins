@@ -14,35 +14,66 @@ class OpenMWPlayerFiles():
         self._settings = settings
         self._strings = strings
         self._log = log
+        # Thread-safety: lock for cfg refresh operations
+        self._refreshLock = threading.Lock()
 
     _settingsCfgHeadingRegex = r"\[(?P<title>[^\]]*)\]"
-    _settingsCfgSettingRegex = r"^(?P<setting>[^=\n#]*)\s=\s(?P<value>[^\n]*)"
+    # Updated regex to handle optional spaces around '=' and empty values
+    _settingsCfgSettingRegex = r"^(?P<setting>[^=\n#]+?)\s*=\s*(?P<value>[^\n]*)"
+    _settingsCfgCommentRegex = r"^[#;]\s*(?P<comment>.*)"
+
     def readSettingsCfg(self, cfgPath:str):
-        """Reads a settings.cfg into a dictionary."""
+        """Reads a settings.cfg into a dictionary with comments."""
         if Path(cfgPath).exists():
             settingsCfg = {}
             cfgLines = loadLines(cfgPath)
             cfgGroup = ""
+            pendingComment = []
+
             for cfgLine in cfgLines:
                 headingMatch = re.match(self._settingsCfgHeadingRegex, cfgLine)
+                commentMatch = re.match(self._settingsCfgCommentRegex, cfgLine)
                 settingMatch = re.match(self._settingsCfgSettingRegex, cfgLine)
+
                 if headingMatch:
                     cfgGroup = headingMatch.groups()[0]
                     settingsCfg[cfgGroup] = {}
-                elif settingMatch:
-                    settingsCfg[cfgGroup][settingMatch.groups()[0]] = settingMatch.groups()[1]
+                    pendingComment = []
+                elif commentMatch:
+                    pendingComment.append(commentMatch.group("comment"))
+                elif settingMatch and cfgGroup:
+                    # Strip whitespace from setting name, preserve value as-is (including empty)
+                    settingName = settingMatch.groups()[0].strip()
+                    settingValue = settingMatch.groups()[1]
+                    settingsCfg[cfgGroup][settingName] = {
+                        "value": settingValue,
+                        "comment": "\n".join(pendingComment) if pendingComment else ""
+                    }
+                    pendingComment = []
+                elif not cfgLine.strip():
+                    # Blank line resets pending comments
+                    pendingComment = []
             return settingsCfg
         else:
             return None
         
     def saveSettingsCfg(self, cfgPath:str, settingsCfg:dict):
-        """Saves a settings.cfg dictionary to a specific path."""
+        """Saves a settings.cfg dictionary to a specific path, preserving comments."""
         cfgText = []
         for cfgGroup in settingsCfg:
             cfgText.append("\n")
             cfgText.append(f"[{cfgGroup}]\n")
             for cfgKey in settingsCfg[cfgGroup]:
-                cfgValue = settingsCfg[cfgGroup][cfgKey]
+                settingData = settingsCfg[cfgGroup][cfgKey]
+                # Handle both old format (string) and new format (dict)
+                if isinstance(settingData, dict):
+                    comment = settingData.get("comment", "")
+                    cfgValue = settingData.get("value", "")
+                    if comment:
+                        for line in comment.split("\n"):
+                            cfgText.append(f"# {line}\n")
+                else:
+                    cfgValue = settingData
                 cfgText.append(f"{cfgKey} = {cfgValue}\n")
         if saveLines(cfgPath, cfgText):
             self._log.debug(f"Saved {cfgPath}")
@@ -75,17 +106,60 @@ class OpenMWPlayerFiles():
             return self.readSettingsCfg(settingsCfgPath)
         return None
     
+    def _getSettingValue(self, settingData) -> str:
+        """Extract value from setting data (handles both string and dict formats)."""
+        if isinstance(settingData, dict):
+            return settingData.get("value", "")
+        return settingData
+
+    def _getSettingComment(self, settingData) -> str:
+        """Extract comment from setting data (handles both string and dict formats)."""
+        if isinstance(settingData, dict):
+            return settingData.get("comment", "")
+        return ""
+
     def getCompleteSettingsCfg(self):
         """Gets the full settings.cfg from a profile, merged with missing entries from default settings."""
         profileCfg = self.getCustomSettingsCfg()
         defaultCfg = self.getDefaultSettingsCfg()
-        # Overwrite all default config values with ones from the profile.
-        if profileCfg != None and defaultCfg != None:
-            for key in defaultCfg:
-                if key in profileCfg:
-                    for setting in defaultCfg[key]:
-                        if setting in profileCfg[key]:
-                            defaultCfg[key][setting] = profileCfg[key][setting]
+
+        # If we have no default config, use profile config or empty dict
+        if defaultCfg is None:
+            return profileCfg if profileCfg is not None else {}
+
+        # If we have no profile config, just return defaults
+        if profileCfg is None:
+            return defaultCfg
+
+        # Merge profile config into default config
+        # This preserves all default settings and overwrites with profile values where they exist
+        for category in defaultCfg:
+            if category in profileCfg:
+                for setting in defaultCfg[category]:
+                    if setting in profileCfg[category]:
+                        # Use profile value (even if empty - user may have intentionally cleared it)
+                        # Preserve comment from default if profile doesn't have one
+                        profileData = profileCfg[category][setting]
+                        defaultData = defaultCfg[category][setting]
+                        profileValue = self._getSettingValue(profileData)
+                        defaultComment = self._getSettingComment(defaultData)
+                        profileComment = self._getSettingComment(profileData)
+                        # Use profile comment if it has one, otherwise keep default comment
+                        finalComment = profileComment if profileComment else defaultComment
+                        defaultCfg[category][setting] = {
+                            "value": profileValue,
+                            "comment": finalComment
+                        }
+
+        # Also add any categories/settings from profile that aren't in defaults
+        for category in profileCfg:
+            if category not in defaultCfg:
+                defaultCfg[category] = profileCfg[category]
+            else:
+                for setting in profileCfg[category]:
+                    if setting not in defaultCfg[category]:
+                        defaultCfg[category][setting] = profileCfg[category][setting]
+
         return defaultCfg
 
     _openmwCfgRegex = r"fallback=(?P<setting>[^,]*),(?P<value>[^\n]*)"
@@ -205,29 +279,63 @@ class OpenMWPlayerFiles():
         dataFolders = self.getDataFolders()
         content = []
         for folder in dataFolders:
-            globPattern = f"{folder}\\*.esp"
-            matches = glob.glob(globPattern)
-            for match in matches:
-                content.append(os.path.basename(match))
+            for ext in ["*.esp", "*.esm"]:
+                globPattern = f"{folder}\\{ext}"
+                matches = glob.glob(globPattern)
+                for match in matches:
+                    content.append(os.path.basename(match))
         return content
-    
-    _refreshInProgress = False
+
     def refreshOpenmwCfg(self):
-        if not self._refreshInProgress:
-            self._refreshInProgress = True
+        """Refreshes openmw.cfg - MUST be called from main thread as it accesses MO2 API."""
+        # Gather data from MO2 API on main thread
+        dataFolders = self.getDataFolders()
+        enabledPlugins = self.getEnabledPlugins()
+        # Now do the file I/O (thread-safe)
+        self._refreshOpenmwCfgWithData(dataFolders, enabledPlugins)
+
+    def _refreshOpenmwCfgWithData(self, dataFolders: list, enabledPlugins: list):
+        """Internal method that refreshes openmw.cfg using pre-fetched data. Thread-safe."""
+        with self._refreshLock:
             currentCfg = self.getCustomOpenmwCfg()
-            if currentCfg != None:
-                currentCfg["Data"] = self.getDataFolders()
-                currentCfg["Content"] = self.getEnabledPlugins()
-                validArchives = self.getArchiveOptions()
-                validGroundcover = self.getGroundcoverOptions()
+            if currentCfg is not None:
+                currentCfg["Data"] = dataFolders
+                currentCfg["Content"] = enabledPlugins
+                validArchives = self._getArchiveOptionsFromFolders(dataFolders)
+                validGroundcover = self._getGroundcoverOptionsFromFolders(dataFolders)
                 currentCfg["Archives"] = list(filter(lambda archive: archive in validArchives, currentCfg["Archives"]))
                 currentCfg["Groundcover"] = list(filter(lambda groundcover: groundcover in validGroundcover, currentCfg["Groundcover"]))
                 self.saveOpenmwCfg(self._strings.customOpenmwCfgPath(), currentCfg)
-            self._refreshInProgress = False
-        
-    def refreshOpenmwCfgAsync(self):
-        t = threading.Thread(target=self.refreshOpenmwCfgAsync, daemon=True)
+
+    def _getArchiveOptionsFromFolders(self, dataFolders: list):
+        """Gets archive options from pre-fetched data folders. Thread-safe."""
+        archives = []
+        for folder in dataFolders:
+            globPattern = f"{folder}\\*.bsa"
+            matches = glob.glob(globPattern)
+            for match in matches:
+                archives.append(os.path.basename(match))
+        return archives
+
+    def _getGroundcoverOptionsFromFolders(self, dataFolders: list):
+        """Gets groundcover options from pre-fetched data folders. Thread-safe."""
+        content = []
+        for folder in dataFolders:
+            for ext in ["*.esp", "*.esm"]:
+                globPattern = f"{folder}\\{ext}"
+                matches = glob.glob(globPattern)
+                for match in matches:
+                    content.append(os.path.basename(match))
+        return content
+
+    def refreshOpenmwCfgAsync(self, dataFolders: list = None, enabledPlugins: list = None):
+        """Async refresh - if data not provided, MUST be called from main thread to fetch it."""
+        if dataFolders is None or enabledPlugins is None:
+            # Fetch on current thread (must be main thread!)
+            dataFolders = self.getDataFolders()
+            enabledPlugins = self.getEnabledPlugins()
+        # Now spawn thread with pre-fetched data
+        t = threading.Thread(target=self._refreshOpenmwCfgWithData, args=(dataFolders, enabledPlugins), daemon=True)
         t.start()
 
     def clearBOMFlag(self, path):
